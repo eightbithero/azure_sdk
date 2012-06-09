@@ -1,0 +1,4 @@
+azure_sdk
+=========
+
+sfAzureSDKPlugin
