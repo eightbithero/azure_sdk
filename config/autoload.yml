@@ -1,0 +1,13 @@
+autoload:
+  # zend_gdata
+#  azure_sdk:
+#    name:           azure_sdk
+#    path:           <?php echo realpath(dirname(__FILE__).'/../lib/vendor/azure-sdk-for-php/WindowsAzure/WindowsAzure.php')."\n"; ?>
+#    recursive:      false
+#    exclude:        []
+
+  azure_splugin_files:
+    name:           azure_sdk_plugin_files
+    path:           <?php echo realpath(dirname(__FILE__).'/../lib')."\n" ?>
+    recursive:      true
+    exclude:        [vendor]

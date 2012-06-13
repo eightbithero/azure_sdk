@@ -1,0 +1,3 @@
+config/account.yml:
+  class:    sfAzureAccountConfigInstanceHandler
+  file: %SF_PLUGINS_DIR%/sfAzureSDKPlugin/lib/config/sfAzureAccountConfigInstanceHandler.class.php
