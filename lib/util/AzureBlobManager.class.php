@@ -7,7 +7,7 @@
  * To change this template use File | Settings | File Templates.
  */
 
-require_once '/home/lmaxim/clipclock/plugins/sfAzureSDKPlugin/lib/vendor/azure-sdk-for-php/WindowsAzure/WindowsAzure.php';
+require_once(dirname(__FILE__).'/../vendor/azure-sdk-for-php/WindowsAzure/WindowsAzure.php');
 
 # AZURE configuration
 use WindowsAzure\Common\Configuration;
@@ -26,8 +26,8 @@ use WindowsAzure\Blob\Models\CreateBlobOptions;
 class AzureBlobManager {
 
 	// http://msdn.microsoft.com/en-us/library/windowsazure/dd179439.aspx
-	const CONTAINER_ALREADY_EXISTS_CODE = 409;
-	const CONFLICT_CODE = 409;
+	const CONTAINER_ALREADY_EXISTS_REASON = 'The specified container already exists.';
+	const BLOB_ALREADY_EXISTS = 'The specified blob already exists.';
 
 	protected
 		$_blobRestProxy = null;
@@ -45,6 +45,15 @@ class AzureBlobManager {
 
 	}
 
+	protected function createContainer($container_name)
+	{
+		try {
+			$this->_blobRestProxy->createContainer($container_name);
+		} catch(ServiceException $e) {
+			throw new ExtendedServiceException($e);
+		}
+	}
+
 	public function createContainerNX($container_name)
 	{
 		/**
@@ -52,12 +61,23 @@ class AzureBlobManager {
 		 */
 
 		try {
-			$this->_blobRestProxy->createContainer($container_name);
+			$this->createContainer($container_name);
 		}
-		catch(ServiceException $e){
+		catch(ExtendedServiceException $e){
+			if ("ContainerAlreadyExists" == $e->getErrorCode())
+				return true;
+			return false;
+		}
 
-			if (self::CONTAINER_ALREADY_EXISTS_CODE != $e->getCode())
-				throw $e;
+		return true;
+	}
+
+	protected function createBlockBlob($container_name, $blob_name, $content, $options)
+	{
+		try {
+			$this->_blobRestProxy->createBlockBlob($container_name, $blob_name, $content, $options);
+		} catch(ServiceException $e) {
+			throw new ExtendedServiceException($e);
 		}
 	}
 
@@ -78,21 +98,20 @@ class AzureBlobManager {
 			 * Если setBlobContentType не задан, то будет использоваться setContentType , причем azure в конце не
 			 * определяет тот ли это mime-type
 			 */
+			$this->createBlockBlob($container_name, $blob_name, $content, $options);
 
-			$this->_blobRestProxy->createBlockBlob($container_name, $blob_name, $content, $options);
 		}
-		catch(ServiceException $e){
+		catch(ExtendedServiceException $e){
 			/**
-			 * BlobAlreadyExists
-
-				Conflict (409)
-
-				The specified blob already exists.
-			 *
 			 * But NEVER throws!
 			 */
 
-			throw $e;
+			if ("BlobAlreadyExists" == $e->getErrorCode())
+				return true;
+			return false;
+		}
+		catch(Exception $e){
+			return false;
 		}
 
 		return true;
