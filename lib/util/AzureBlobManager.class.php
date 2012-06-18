@@ -7,7 +7,9 @@
  * To change this template use File | Settings | File Templates.
  */
 
-require_once(dirname(__FILE__).'/../vendor/azure-sdk-for-php/WindowsAzure/WindowsAzure.php');
+//require_once(dirname(__FILE__).'/../vendor/azure-sdk-for-php/WindowsAzure/WindowsAzure.php');
+require_once(dirname(__FILE__).'/../util/WindowsAzureAutoload.class.php');
+spl_autoload_register(array('WindowsAzureAutoload', 'loadClass'), true, true);
 
 # AZURE configuration
 use WindowsAzure\Common\Configuration;
@@ -16,6 +18,7 @@ use WindowsAzure\Common\Configuration;
 use WindowsAzure\Blob\Models\CreateContainerOptions;
 use WindowsAzure\Blob\Models\PublicAccessType;
 use WindowsAzure\Common\ServiceException;
+
 
 # AZURE blob
 use WindowsAzure\Blob\BlobSettings;
@@ -45,10 +48,10 @@ class AzureBlobManager {
 
 	}
 
-	protected function createContainer($container_name)
+	protected function createContainer($container_name, $createContainerOptions)
 	{
 		try {
-			$this->_blobRestProxy->createContainer($container_name);
+			$this->_blobRestProxy->createContainer($container_name, $createContainerOptions);
 		} catch(ServiceException $e) {
 			throw new ExtendedServiceException($e);
 		}
@@ -61,7 +64,10 @@ class AzureBlobManager {
 		 */
 
 		try {
-			$this->createContainer($container_name);
+			$createContainerOptions = new CreateContainerOptions();
+			$createContainerOptions->setPublicAccess(PublicAccessType::CONTAINER_AND_BLOBS);
+			$createContainerOptions->addMetaData("public", $container_name);
+			$this->createContainer($container_name, $createContainerOptions);
 		}
 		catch(ExtendedServiceException $e){
 			if ("ContainerAlreadyExists" == $e->getErrorCode())
@@ -81,14 +87,25 @@ class AzureBlobManager {
 		}
 	}
 
+	protected function deleteFile($container_name, $blob_name)
+	{
+		try {
+			$this->_blobRestProxy->deleteBlob($container_name, $blob_name);
+		} catch(ServiceException $e) {
+			throw new ExtendedServiceException($e);
+		}
+	}
+
 	public function putFile($container_name, $blob_name, $file_path)
 	{
 		# About naming and other
 		# http://msdn.microsoft.com/en-us/library/windowsazure/dd135715.aspx
-		$this->createContainerNX($container_name);
+
+		$result = $this->createContainerNX($container_name);
 
 		try {
-			$content = fopen($file_path, "r"); //file_get_contents($file_path); //<--avaible
+			//$content = fopen($file_path, "r");
+			$content = file_get_contents($file_path); //<--avaible
 
 			$mime_typer = new FileMimeType();
 
@@ -107,10 +124,15 @@ class AzureBlobManager {
 			 */
 
 			if ("BlobAlreadyExists" == $e->getErrorCode())
-				return true;
-			return false;
+				$this->deleteFile($container_name, $blob_name);
+				return $this->putFile($container_name, $blob_name, $file_path);
+			throw $e;
 		}
-		catch(Exception $e){
+		catch(HTTP_Request2_MessageException $e)
+		{
+			throw $e;
+		}
+		catch(Exception $e) {
 			return false;
 		}
 
@@ -120,17 +142,18 @@ class AzureBlobManager {
 	public function getBlobListFromContainer($container_name)
 	{
 		try {
-			// List blobs.
+			$list = array();
 			$blob_list = $this->_blobRestProxy->listBlobs($container_name);
 			$blobs = $blob_list->getBlobs();
 
 			foreach($blobs as $blob)
 			{
-				echo $blob->getName().": ".$blob->getUrl()."<br />";
+				$list[$blob->getName()] = $blob->getUrl();
 			}
+
+			return $list;
 		}
 		catch(ServiceException $e){
-			// must we catch any exception about continer unabilty ?
 			throw $e;
 		}
 	}
