@@ -139,6 +139,34 @@ class AzureBlobManager {
 		return true;
 	}
 
+	public function extractAndTestOnExistsFromPath($path)
+	{
+		$fixed_path = preg_replace('/^(\/)+?/','',$path, 1);
+		list($container_name, $filename) = explode('/', $fixed_path, 2);
+		return $this->isFileInContainer($filename, $container_name);
+	}
+
+	public function isFileInContainer($filename, $container_name)
+	{
+		try {
+			$blob_list = $this->_blobRestProxy->listBlobs($container_name);
+			$blobs = $blob_list->getBlobs();
+
+			foreach($blobs as $blob)
+			{
+				if ($blob->getName() === $filename)
+				{
+					return true;
+				}
+			}
+
+			return false;
+		}
+		catch(ServiceException $e){
+			throw $e;
+		}
+	}
+
 	public function getBlobListFromContainer($container_name)
 	{
 		try {
