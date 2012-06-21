@@ -16,6 +16,7 @@ use WindowsAzure\Common\Configuration;
 
 # AZURE container
 use WindowsAzure\Blob\Models\CreateContainerOptions;
+use WindowsAzure\Blob\Models\ListBlobsOptions;
 use WindowsAzure\Blob\Models\PublicAccessType;
 use WindowsAzure\Common\ServiceException;
 
@@ -171,13 +172,22 @@ class AzureBlobManager {
 	{
 		try {
 			$list = array();
-			$blob_list = $this->_blobRestProxy->listBlobs($container_name);
-			$blobs = $blob_list->getBlobs();
+			$marker = null;
+			do {
+				$options = new ListBlobsOptions();
+				if ($marker)
+					$options->setMarker($marker);
+				$blob_list = $this->_blobRestProxy->listBlobs($container_name, $options);
+				$marker = $blob_list->getNextMarker();
+				$blobs = $blob_list->getBlobs();
 
-			foreach($blobs as $blob)
-			{
-				$list[$blob->getName()] = $blob->getUrl();
-			}
+
+				foreach($blobs as $blob)
+				{
+
+					$list[$blob->getName()] = $blob->getUrl();
+				}
+			} while ($marker);
 
 			return $list;
 		}
