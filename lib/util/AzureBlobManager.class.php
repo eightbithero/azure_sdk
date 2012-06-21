@@ -168,6 +168,18 @@ class AzureBlobManager {
 		}
 	}
 
+	protected function returnBlobList($container_name, $options, $cnt = 0)
+	{
+		if ($cnt > 10) throw new Exception('loop detected');
+		try {
+				$blob_list = $this->_blobRestProxy->listBlobs($container_name, $options);
+				$marker = $blob_list->getNextMarker();
+			} catch (HTTP_Request2_Exception $e) { //net_php_pear_HTTP_Request2_Exception
+				return $this->returnBlobList($container_name, $options, ++$cnt);
+			}
+		return array($blob_list, $marker);
+	}
+
 	public function getBlobListFromContainer($container_name)
 	{
 		try {
@@ -176,15 +188,15 @@ class AzureBlobManager {
 			do {
 				$options = new ListBlobsOptions();
 				if ($marker)
+				{
 					$options->setMarker($marker);
-				$blob_list = $this->_blobRestProxy->listBlobs($container_name, $options);
-				$marker = $blob_list->getNextMarker();
+				}
+				
+				list($blob_list, $marker) = $this->returnBlobList($container_name, $options, 0);
 				$blobs = $blob_list->getBlobs();
-
 
 				foreach($blobs as $blob)
 				{
-
 					$list[$blob->getName()] = $blob->getUrl();
 				}
 			} while ($marker);
