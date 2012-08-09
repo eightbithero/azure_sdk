@@ -97,7 +97,7 @@ class AzureBlobManager {
 		}
 	}
 
-	public function putFile($container_name, $blob_name, $file_path)
+	public function putFile($container_name, $blob_name, $file_path, $retry = 0)
 	{
 		# About naming and other
 		# http://msdn.microsoft.com/en-us/library/windowsazure/dd135715.aspx
@@ -124,9 +124,12 @@ class AzureBlobManager {
 			 * But NEVER throws!
 			 */
 
+			if ($retry > 3)
+				throw $e;
+
 			if ("BlobAlreadyExists" == $e->getErrorCode())
 				$this->deleteFile($container_name, $blob_name);
-				return $this->putFile($container_name, $blob_name, $file_path);
+				return $this->putFile($container_name, $blob_name, $file_path, ++$retry);
 			throw $e;
 		}
 		catch(HTTP_Request2_MessageException $e)
