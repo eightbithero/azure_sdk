@@ -105,7 +105,7 @@ class AzureBlobManager {
 
 		try {
 			//$content = fopen($file_path, "r");
-			$content = file_get_contents($file_path); //<--avaible
+			//$content = file_get_contents($file_path); //<--avaible
 
 			$mime_typer = new FileMimeType();
 
@@ -115,7 +115,7 @@ class AzureBlobManager {
 			 * Если setBlobContentType не задан, то будет использоваться setContentType , причем azure в конце не
 			 * определяет тот ли это mime-type
 			 */
-			$this->createBlockBlob($container_name, $blob_name, $content, $options);
+			$this->createBlockBlob($container_name, $blob_name, $file_path, $options);
 
 		}
 		catch(ExtendedServiceException $e){
