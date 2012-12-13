@@ -16,6 +16,7 @@ use WindowsAzure\Common\Configuration;
 
 # AZURE container
 use WindowsAzure\Blob\Models\CreateContainerOptions;
+use WindowsAzure\Blob\Models\ListBlobsOptions;
 use WindowsAzure\Blob\Models\PublicAccessType;
 use WindowsAzure\Common\ServiceException;
 
@@ -96,7 +97,7 @@ class AzureBlobManager {
 		}
 	}
 
-	public function putFile($container_name, $blob_name, $file_path)
+	public function putFile($container_name, $blob_name, $file_path, $retry = 0)
 	{
 		# About naming and other
 		# http://msdn.microsoft.com/en-us/library/windowsazure/dd135715.aspx
@@ -105,7 +106,7 @@ class AzureBlobManager {
 
 		try {
 			//$content = fopen($file_path, "r");
-			$content = file_get_contents($file_path); //<--avaible
+			//$content = file_get_contents($file_path); //<--avaible
 
 			$mime_typer = new FileMimeType();
 
@@ -115,7 +116,7 @@ class AzureBlobManager {
 			 * Если setBlobContentType не задан, то будет использоваться setContentType , причем azure в конце не
 			 * определяет тот ли это mime-type
 			 */
-			$this->createBlockBlob($container_name, $blob_name, $content, $options);
+			$this->createBlockBlob($container_name, $blob_name, $file_path, $options);
 
 		}
 		catch(ExtendedServiceException $e){
@@ -123,9 +124,12 @@ class AzureBlobManager {
 			 * But NEVER throws!
 			 */
 
+			if ($retry > 3)
+				throw $e;
+
 			if ("BlobAlreadyExists" == $e->getErrorCode())
 				$this->deleteFile($container_name, $blob_name);
-				return $this->putFile($container_name, $blob_name, $file_path);
+				return $this->putFile($container_name, $blob_name, $file_path, ++$retry);
 			throw $e;
 		}
 		catch(HTTP_Request2_MessageException $e)
@@ -139,17 +143,66 @@ class AzureBlobManager {
 		return true;
 	}
 
-	public function getBlobListFromContainer($container_name)
+	public function extractAndTestOnExistsFromPath($path)
+	{
+		$fixed_path = preg_replace('/^(\/)+?/','',$path, 1);
+		list($container_name, $filename) = explode('/', $fixed_path, 2);
+		return $this->isFileInContainer($filename, $container_name);
+	}
+
+	public function isFileInContainer($filename, $container_name)
 	{
 		try {
-			$list = array();
 			$blob_list = $this->_blobRestProxy->listBlobs($container_name);
 			$blobs = $blob_list->getBlobs();
 
 			foreach($blobs as $blob)
 			{
-				$list[$blob->getName()] = $blob->getUrl();
+				if ($blob->getName() === $filename)
+				{
+					return true;
+				}
 			}
+
+			return false;
+		}
+		catch(ServiceException $e){
+			throw $e;
+		}
+	}
+
+	protected function returnBlobList($container_name, $options, $cnt = 0)
+	{
+		if ($cnt > 10) throw new Exception('loop detected');
+		try {
+				$blob_list = $this->_blobRestProxy->listBlobs($container_name, $options);
+				$marker = $blob_list->getNextMarker();
+			} catch (HTTP_Request2_Exception $e) { //net_php_pear_HTTP_Request2_Exception
+				return $this->returnBlobList($container_name, $options, ++$cnt);
+			}
+		return array($blob_list, $marker);
+	}
+
+	public function getBlobListFromContainer($container_name)
+	{
+		try {
+			$list = array();
+			$marker = null;
+			do {
+				$options = new ListBlobsOptions();
+				if ($marker)
+				{
+					$options->setMarker($marker);
+				}
+				
+				list($blob_list, $marker) = $this->returnBlobList($container_name, $options, 0);
+				$blobs = $blob_list->getBlobs();
+
+				foreach($blobs as $blob)
+				{
+					$list[$blob->getName()] = $blob->getUrl();
+				}
+			} while ($marker);
 
 			return $list;
 		}
